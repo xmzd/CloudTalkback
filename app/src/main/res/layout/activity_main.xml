@@ -1,0 +1,95 @@
+<?xml version="1.0" encoding="utf-8"?>
+<RelativeLayout
+    xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context="com.vanda.javacv.demo.MainActivity">
+
+    <ImageView
+        android:id="@+id/image"
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:scaleType="centerCrop"/>
+
+    <FrameLayout
+        android:id="@+id/container"
+        android:layout_width="100dp"
+        android:layout_height="100dp"
+        android:layout_alignParentRight="true">
+
+    </FrameLayout>
+
+
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_alignParentBottom="true"
+        android:orientation="vertical">
+
+        <Button
+            android:id="@+id/endCall"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="EndCall"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/ackCall"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="AckCall"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/videoCall"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="VideoCall"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/voiceCall"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="VoiceCall"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/sendMessage"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SendMessage"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/signOut"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SignOut"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/signIn"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="SignIn"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/connect"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Connect"
+            android:textAllCaps="false"/>
+
+        <Button
+            android:id="@+id/button"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Camera"
+            android:textAllCaps="false"/>
+
+    </LinearLayout>
+
+</RelativeLayout>
