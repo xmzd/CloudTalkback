@@ -46,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     private AudioRecorder mAudioRecorder;
     private ImageEmitter mImageEmitter;
     private AudioEmitter mAudioEmitter;
+    private AudioPlayer mAudioPlayer;
 
     private SocketClient mClient;
     private String mHost = "192.168.3.77";
@@ -64,8 +65,7 @@ public class MainActivity extends AppCompatActivity {
         findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                openCamera();
-                record();
+                openTalk();
             }
         });
 
@@ -73,14 +73,12 @@ public class MainActivity extends AppCompatActivity {
         mClient.setMediaConversation(new IMediaConversation() {
             @Override
             public void openConversation() {
-                openCamera();
-                record();
-                startReceive();
+//                openTalk();
             }
 
             @Override
             public void closeConversation() {
-
+//                closeTalk();
             }
         });
 
@@ -122,7 +120,7 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onClick(View v) {
                 Message msg = new Message();
-                msg.setMessageId("1111");
+                msg.setMessageId(String.valueOf(System.currentTimeMillis()));
                 msg.setMessageType(1);
                 msg.setSourcePerson(IMConstants.SOURCE_PERSON);
                 msg.setSourceDevice(IMConstants.SOURCE_DEVICE);
@@ -144,7 +142,7 @@ public class MainActivity extends AppCompatActivity {
                  "voiceId": "视频语音回话ID，如果没有传入则会生成一个",
                  */
                 Message msg = new Message();
-                msg.setMessageId("8888");
+                msg.setMessageId(String.valueOf(System.currentTimeMillis()));
                 msg.setMessageType(8);
                 msg.setSourcePerson(IMConstants.SOURCE_PERSON);
                 msg.setSourceDevice(IMConstants.SOURCE_DEVICE);
@@ -164,7 +162,7 @@ public class MainActivity extends AppCompatActivity {
                  "voiceId": "视频语音回话ID，如果没有传入则会生成一个",
                  */
                 Message msg = new Message();
-                msg.setMessageId("7777");
+                msg.setMessageId(String.valueOf(System.currentTimeMillis()));
                 msg.setMessageType(7);
                 msg.setSourcePerson(IMConstants.SOURCE_PERSON);
                 msg.setSourceDevice(IMConstants.SOURCE_DEVICE);
@@ -262,13 +260,32 @@ public class MainActivity extends AppCompatActivity {
         });
         // 音频接收
 //        mAudioReceiver = new AudioReceiver();
-        AudioPlayer player = new AudioPlayer();
+        mAudioPlayer = new AudioPlayer();
 //        player.setAudioReceiver(mAudioReceiver);
-        player.setAudioReceiver(mAVReceiver);
-        player.prepare();
+        mAudioPlayer.setAudioReceiver(mAVReceiver);
+        mAudioPlayer.prepare();
 //        mAudioReceiver.start();
 
         mAVReceiver.start();
+    }
+
+    /**
+     * 开启会话
+     */
+    private void openTalk() {
+        openCamera();
+        record();
+        startReceive();
+    }
+
+    /**
+     * 结束会话
+     */
+    private void closeTalk() {
+        mImageEmitter.stop();
+        mAudioEmitter.stop();
+        mAVReceiver.stop();
+        mAudioPlayer.release();
     }
 
     @Override

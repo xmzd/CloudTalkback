@@ -72,8 +72,6 @@ public class SocketClient {
                         log("New Message: " + message);
                         Message msg = new Gson().fromJson(message, Message.class);
 
-                        dealMessage(msg);
-
                         if (msg != null && msg.getAckType() != 0) {
                             // 收到ack消息，取消重发机制
                             mMsgAck = true;
@@ -86,8 +84,10 @@ public class SocketClient {
                                 mTimerTask = null;
                             }
                         } else {
-//                            sendAck(message);
+                            sendAck(message);
                         }
+
+                        dealMessage(msg);
 
                     }
                 } catch (IOException e) {
@@ -108,17 +108,17 @@ public class SocketClient {
         voiceId = msg.getVoiceId();
         targetPerson = msg.getSourcePerson();
         int type = msg.getMessageType();
-        if (type == 7 || type == 8) {
+        if (type == 11 || type == 12) {
             // 音视频请求，回执
             mediaMsg = new Message();
-            mediaMsg.setMessageId("9999");
+            mediaMsg.setMessageId(String.valueOf(System.currentTimeMillis()));
             mediaMsg.setMessageType(9);
             mediaMsg.setSourcePerson(IMConstants.SOURCE_PERSON);
             mediaMsg.setSourceDevice(IMConstants.SOURCE_DEVICE);
             mediaMsg.setTargetPerson(msg.getSourcePerson());
             mediaMsg.setTargetDevice(msg.getSourceDevice());
             mediaMsg.setVoiceId(msg.getVoiceId());
-        } else if (type == 9) {
+        } else if (type == 13) {
             // 开启音视频会话
             if (mConversation != null) {
                 mConversation.openConversation();
@@ -149,7 +149,7 @@ public class SocketClient {
      */
     public void endMediaCall() {
         Message msg = new Message();
-        msg.setMessageId("101010");
+        msg.setMessageId(String.valueOf(System.currentTimeMillis()));
         msg.setMessageType(10);
         msg.setSourcePerson(IMConstants.SOURCE_PERSON);
         msg.setSourceDevice(IMConstants.SOURCE_DEVICE);
@@ -174,7 +174,7 @@ public class SocketClient {
             mAckMsg.setAckType(1);
             mAckMsg.setMessageType(4);
             mAckMsg.setMessageId(msg.getMessageId());
-            mAckMsg.setOriginalMessageId(msg.getOriginalMessageId());
+//            mAckMsg.setOriginalMessageId(msg.getOriginalMessageId());
             mAckMsg.setSourcePerson(msg.getTargetPerson());
             mAckMsg.setSourceDevice(msg.getTargetDevice());
             doSend(mAckMsg);
