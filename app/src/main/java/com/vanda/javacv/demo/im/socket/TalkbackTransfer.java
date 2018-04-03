@@ -6,8 +6,11 @@ import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
+import android.os.*;
+import android.util.SparseArray;
 
 import com.vanda.javacv.demo.im.IMConstants;
+import com.vanda.javacv.demo.im.IMediaReceiver;
 import com.vanda.javacv.demo.im.PacketUtil;
 import com.vanda.javacv.demo.utils.Logger;
 
@@ -15,9 +18,14 @@ import org.json.JSONObject;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.ref.WeakReference;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.Iterator;
+import java.util.Map;
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
@@ -35,25 +43,78 @@ public class TalkbackTransfer {
     private boolean mIsInitialized;
     private ImageSize mImageSize;
     private DataEntity mDataEntity;
-    private static final int packetLength = 5000;
+    private static final int packetLength = 2000;
     private static final int headerLength = 200;
-    private static final int contentLength = 4800;
+    private static final int contentLength = 1800;
+    private static final int frameLength = 8;
 
     private LinkedBlockingDeque<byte[]> mImageDeque;
-    private long mFrameCounter = 0;
+    private LinkedBlockingDeque<byte[]> mAudioDeque;
+    private long mFrameImageCounter = 0;
+    private long mFrameAudioCounter = 0;
 
-    public void setImageDataSource(LinkedBlockingDeque<byte[]> deque) {
-        mImageDeque = deque;
+    private IMediaReceiver mAudioReceiver;
+    private IMediaReceiver mImageReceiver;
+    private static final int WHAT_SUCCESS = 1;
+    private static final String ARGS_DATA = "data";
+    private ReceiveHandler mHandler;
+    private Map<Byte, byte[]> mImageMap = new HashMap<>();
+    private SparseArray<byte[]> mImageArray;
+    private SparseArray<byte[]> mAudioArray;
+    private Map<Byte, byte[]> mAudioMap = new HashMap<>();
+    private long mCurrentImageFrameNum = 1;
+    private int mCurrentImageFramePacketSum;
+    private long mCurrentAudioFrameNum = 1;
+    private int mCurrentAudioFramePacketSum;
+
+    /**
+     * Handler
+     */
+    private static class ReceiveHandler extends Handler {
+
+        private WeakReference<TalkbackTransfer> mRef;
+
+        ReceiveHandler(TalkbackTransfer instance) {
+            mRef = new WeakReference<TalkbackTransfer>(instance);
+        }
+
+        @Override
+        public void handleMessage(android.os.Message msg) {
+            if (mRef == null) {
+                return;
+            }
+            TalkbackTransfer instance = mRef.get();
+            if (instance == null) {
+                return;
+            }
+            switch (msg.what) {
+                case WHAT_SUCCESS:
+                    Bundle bundle = msg.getData();
+                    if (bundle != null) {
+                        byte[] data = bundle.getByteArray(ARGS_DATA);
+                        if (instance.mImageReceiver != null && data != null && data.length > 0) {
+                            instance.mImageReceiver.onReceive(data);
+                        }
+                    }
+                    break;
+            }
+        }
+
     }
 
     public TalkbackTransfer() {
         init();
+        mHandler = new ReceiveHandler(this);
+        mImageArray = new SparseArray<>();
+        mAudioArray = new SparseArray<>();
     }
 
     private void init() {
         try {
-            mInetAddress = InetAddress.getByName(IMConstants.HOST);
-            mSocket = new MulticastSocket(IMConstants.LOCAL_PORT);
+//            mInetAddress = InetAddress.getByName(getHost());
+            mInetAddress = InetAddress.getByName("239.0.0.100");
+            mSocket = new MulticastSocket(getLocalPort());
+            mSocket.joinGroup(mInetAddress);
             mIsInitialized = true;
         } catch (Exception e) {
             mIsInitialized = false;
@@ -75,9 +136,41 @@ public class TalkbackTransfer {
         }
     };
 
+    /**
+     * 发送音频
+     */
+    private Runnable mEmitAudioRunnable = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                emitAudio();
+            } catch (IOException e) {
+                Logger.e(TAG, "Emit audio data error. " + e.getLocalizedMessage());
+            }
+        }
+    };
+
+    /**
+     * 接收
+     */
+    private Runnable mReceiveRunnable = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                receive();
+            } catch (IOException e) {
+                Logger.e(TAG, "Receive data error. " + e.getLocalizedMessage());
+            }
+        }
+    };
+
+    /**
+     * 发送图片
+     */
     private void emitImage() throws IOException {
         while (!mShutdown) {
             try {
+                // YUV data from queue
                 byte[] data = mImageDeque.take();
                 // 转换成YuvImage
                 YuvImage image = new YuvImage(data, ImageFormat.NV21, mImageSize.width, mImageSize.height, null);
@@ -89,6 +182,217 @@ public class TalkbackTransfer {
                 baos.close();
             } catch (InterruptedException e) {
                 Logger.e(TAG, "error, take image data from deque. " + e.getLocalizedMessage());
+            }
+        }
+    }
+
+    /**
+     * 发送音频
+     */
+    private void emitAudio() throws IOException {
+        while (!mShutdown) {
+            try {
+                byte[] data = mAudioDeque.take();
+                packetData(data, true);
+            } catch (InterruptedException e) {
+                Logger.e(TAG, "error, take audio data from deque. " + e.getLocalizedMessage());
+            }
+        }
+    }
+
+    /**
+     * 接收数据
+     */
+    private void receive() throws IOException {
+        // 用于接收数据
+        byte buff[] = new byte[packetLength];
+        // 存放一帧完整的音频数据
+        byte[] matAudio = new byte[0];
+        // 存放一帧完整的图片数据
+        byte[] matImage = new byte[0];
+        while (!mShutdown) {
+            // 接收数据
+            DatagramPacket dp = new DatagramPacket(buff, packetLength);
+            mSocket.receive(dp);
+            byte[] dpData = dp.getData();
+            int dpLen = dp.getLength();
+            Logger.d(TAG, "data received, length: " + dpLen + ", port: " + getLocalPort());
+
+            // 解udp包
+            byte[] header = new byte[headerLength];
+            System.arraycopy(dpData, 0, header, 0, headerLength);
+
+            // 解json数据
+            byte[] json = new byte[header[10]];
+            System.arraycopy(header, 11, json, 0, header[10]);
+            Logger.d(TAG, "Json data: " + new String(json));
+
+            // 解帧编号
+            byte[] frameCount = new byte[frameLength];
+            System.arraycopy(header, 1, frameCount, 0, frameLength);
+            long frameNum = PacketUtil.bytesToLong(frameCount);
+            Logger.e(TAG, "frame number (帧编号) : " + frameNum);
+
+            // 解包信息
+            byte packet = header[9];
+            // 高4位，拆包总数
+            byte packetSum = (byte) ((packet & 0xF0) >> 4);
+            // 低4位，本次拆包序号
+            byte packetNum = (byte) (packet & 0x0F);
+            Logger.e(TAG, "packet info sum(本次拆包总数): " + packetSum + ", num(本次拆包序号): " + packetNum);
+
+            // 帧数据
+            byte[] content = new byte[dpLen - headerLength];
+            System.arraycopy(dpData, headerLength, content, 0, content.length);
+
+            // 第1个字符，用于判断是图片数据还是音频数据
+            byte first = header[0];
+            if (isAudioData(first)) {
+                // 音频
+                Logger.d(TAG, "audio data dispatching...");
+                if (first == 0x01 << 4) {
+                    // 音频、不拆包
+                    byte[] destData = new byte[matAudio.length + content.length];
+                    System.arraycopy(matAudio, 0, destData, 0, matAudio.length);
+                    System.arraycopy(content, 0, destData, matAudio.length, content.length);
+                    matAudio = destData;
+                    // 播放音频
+                    try {
+                        if (mAudioReceiver != null) {
+                            mAudioReceiver.onReceive(matAudio);
+                        }
+                    } catch (Exception e) {
+                        Logger.e(TAG, "deal audio data error. " + e.getLocalizedMessage());
+                    } finally {
+                        // 复位
+                        matAudio = new byte[0];
+                    }
+                } else if (first == (0x01 << 4 | 0x01)) {
+                    // 音频、需要拆包
+                    if (frameNum > mCurrentAudioFrameNum) {
+                        // 下一帧数据到达，合并上一帧数据并显示
+                        if (mCurrentAudioFramePacketSum != mAudioMap.size()) {
+                            // 当前帧未能完整接收，舍弃
+                        } else {
+                            // 当前帧完整接收，显示
+                            Byte[] keys = new Byte[mAudioMap.size()];
+                            Iterator<Byte> iterator = mAudioMap.keySet().iterator();
+                            int index = 0;
+                            while (iterator.hasNext()) {
+                                keys[index] = iterator.next();
+                                index++;
+                            }
+                            Arrays.sort(keys);
+                            for (Byte b : keys) {
+                                Logger.e(TAG, "排序后的包结果..." + b);
+                                byte[] audioPacket = mAudioMap.get(b);
+                                byte[] destData = new byte[matAudio.length + audioPacket.length];
+                                System.arraycopy(matAudio, 0, destData, 0, matAudio.length);
+                                System.arraycopy(audioPacket, 0, destData, matAudio.length, audioPacket.length);
+                                matAudio = destData;
+                            }
+                            // 播放音频
+                            try {
+                                if (mAudioReceiver != null) {
+                                    mAudioReceiver.onReceive(matAudio);
+                                }
+                            } catch (Exception e) {
+                                Logger.e(TAG, "deal audio data error. " + e.getLocalizedMessage());
+                            } finally {
+                                // 复位
+                                matAudio = new byte[0];
+                            }
+                        }
+                        // 清空map
+                        mAudioMap.clear();
+                        // 放入本包
+                        mAudioMap.put(packetNum, content);
+                    } else if (frameNum == mCurrentAudioFrameNum) {
+                        // 当前帧
+                        mAudioMap.put(packetNum, content);
+                    } else {
+                        // 网络原因导致该包到达较晚，舍弃
+                    }
+                    // 当前帧
+                    mCurrentAudioFrameNum = frameNum;
+                    mCurrentAudioFramePacketSum = packetSum;
+                }
+            } else if (isImageData(first)) {
+                // 视频
+                Logger.d(TAG, "image data dispatching...");
+                if (first == 0x00) {
+                    // 视频、没有拆包
+                    byte[] destData = new byte[matImage.length + content.length];
+                    System.arraycopy(matImage, 0, destData, 0, matImage.length);
+                    System.arraycopy(content, 0, destData, matImage.length, content.length);
+                    matImage = destData;
+                    // 显示本帧数据
+                    try {
+                        sendMsgToTarget(matImage);
+                    } catch (Exception e) {
+                        Logger.e(TAG, "deal image data error. " + e.getLocalizedMessage());
+                    } finally {
+                        // 复位
+                        matImage = new byte[0];
+                    }
+                } else if (first == 0x01) {
+                    // 视频、拆过包
+                    if (frameNum > mCurrentImageFrameNum) {
+                        // 下一帧数据到达，合并上一帧数据并显示
+                        if (mCurrentImageFramePacketSum != /*mImageMap.size()*/mImageArray.size()) {
+                            // 当前帧未能完整接收，舍弃
+                        } else {
+                            // 当前帧完整接收，显示
+                            /*Byte[] keys = new Byte[mImageMap.size()];
+                            Iterator<Byte> iterator = mImageMap.keySet().iterator();
+                            int index = 0;
+                            while (iterator.hasNext()) {
+                                keys[index] = iterator.next();
+                                index++;
+                            }
+                            Arrays.sort(keys);
+                            for (Byte b : keys) {
+                                Logger.e(TAG, "排序后的包结果..." + b);
+                                byte[] imagePacket = mImageMap.get(b);
+                                byte[] destData = new byte[matImage.length + imagePacket.length];
+                                System.arraycopy(matImage, 0, destData, 0, matImage.length);
+                                System.arraycopy(imagePacket, 0, destData, matImage.length, imagePacket.length);
+                                matImage = destData;
+                            }*/
+                            for (int i = 0; i < mImageArray.size(); i++) {
+                                byte[] imagePacket = mImageArray.valueAt(i);
+                                byte[] destData = new byte[matImage.length + imagePacket.length];
+                                System.arraycopy(matImage, 0, destData, 0, matImage.length);
+                                System.arraycopy(imagePacket, 0, destData, matImage.length, imagePacket.length);
+                                matImage = destData;
+                            }
+                            // 显示本帧数据
+                            try {
+                                sendMsgToTarget(matImage);
+                            } catch (Exception e) {
+                                Logger.e(TAG, "deal image data error. " + e.getLocalizedMessage());
+                            } finally {
+                                // 复位
+                                matImage = new byte[0];
+                            }
+                        }
+                        // 清空map
+//                        mImageMap.clear();
+                        mImageArray.clear();
+                        // 放入本包
+//                        mImageMap.put(packetNum, content);
+                        mImageArray.put(packetNum, content);
+                    } else if (frameNum == mCurrentImageFrameNum) {
+                        // 当前帧
+//                        mImageMap.put(packetNum, content);
+                        mImageArray.put(packetNum, content);
+                    } else {
+                        // 网络原因导致该包到达较晚，舍弃
+                    }
+                    // 当前帧
+                    mCurrentImageFrameNum = frameNum;
+                    mCurrentImageFramePacketSum = packetSum;
+                }
             }
         }
     }
@@ -111,25 +415,30 @@ public class TalkbackTransfer {
         byte[] data = baso.toByteArray();
         baso.close();
         // 打包发送
-        packetImage(data);
+        packetData(data, false);
     }
 
-    private void packetImage(byte[] data) throws IOException {
-        /**
-         * 第1个字符，高4位 0000：1-->语音，0-->视频
-         * 第1个字符，低4位 0000：1-->拆包，0-->不拆包
-         *
-         * 第2个字符 至 第9个字符，这8个byte（长整型）表示本帧编号，编号从1开始，每一个后续帧的编号+1
-         *
-         * 第10个字符，高4位 0000：如果拆包，这里记录了拆包的总数，如果不拆包，则没有意义
-         * 第10个字符，低4位 0000：如果拆包，则记录当前包在整个拆包中的序号，从1开始；如果不拆包，则没有意义
-         *
-         *
-         * 第11个字符，共八位，0000 0000 记录包中从第12个字符开始，json数据的长度，最长188
-         * 第12个字符～第200个字符：json数据-->rp：发送人，rd：发送设备，tp：接收人，td接收设备
-         */
+    /**
+     * 根据策略拆包发送
+     * <p>
+     * 第1个字符，高4位 0000：1-->语音，0-->视频
+     * 第1个字符，低4位 0000：1-->拆包，0-->不拆包
+     * <p>
+     * 第2个字符 至 第9个字符，这8个byte（长整型）表示本帧编号，编号从1开始，每一个后续帧的编号+1
+     * <p>
+     * 第10个字符，高4位 0000：如果拆包，这里记录了拆包的总数，如果不拆包，则没有意义
+     * 第10个字符，低4位 0000：如果拆包，则记录当前包在整个拆包中的序号，从1开始；如果不拆包，则没有意义
+     * <p>
+     * 第11个字符，共八位，0000 0000 记录包中从第12个字符开始，json数据的长度，最长188
+     * 第12个字符～第200个字符：json数据-->rp：发送人，rd：发送设备，tp：接收人，td接收设备
+     */
+    private void packetData(byte[] data, boolean isAudio) throws IOException {
         int length = data.length;
-        Logger.d(TAG, "image data original length: " + length);
+        if (isAudio) {
+            Logger.d(TAG, "Audio data original length: " + length);
+        } else {
+            Logger.d(TAG, "Image data original length: " + length);
+        }
         // 构造json数据
         byte[] jsonBytes = getJsonBytes();
         if (jsonBytes == null) {
@@ -137,11 +446,18 @@ public class TalkbackTransfer {
         }
         // 第11个字符，json长度
         byte byte10 = (byte) (jsonBytes.length & 0xFF);
-        // 构建第二个字符至第9个字符
+        // 构建第2个字符至第9个字符
         // 帧计数器+1
-        mFrameCounter++;
-        byte[] frameCount = PacketUtil.longToByte(mFrameCounter);
-        // 构建第一个字符、第10个字符
+        long frameCounter = 0;
+        if (isAudio) {
+            mFrameAudioCounter++;
+            frameCounter = mFrameAudioCounter;
+        } else {
+            mFrameImageCounter++;
+            frameCounter = mFrameImageCounter;
+        }
+        byte[] frameCount = PacketUtil.longToByte(frameCounter);
+        // 构建第1个字符、第10个字符
         byte byte0 = 0;
         byte byte9 = 0;
         if (length > contentLength) {
@@ -150,7 +466,11 @@ public class TalkbackTransfer {
             // 高4位
             byte9 = (byte) ((count & 0xFF) << 4);
             for (int i = 0; i < count; i++) {
-                byte0 = 0x01;
+                if (isAudio) {
+                    byte0 = 0x01 << 4 | 0x01;
+                } else {
+                    byte0 = 0x01;
+                }
                 byte[] content;
                 if (i == count - 1) {
                     // 最后一个包
@@ -163,47 +483,53 @@ public class TalkbackTransfer {
                 // 低4位
                 byte result = (byte) (byte9 | ((i + 1) & 0xFF));
                 // 发送
-                send(jsonBytes, byte10, frameCount, byte0, result, content);
+                send(getHeaderBytes(byte0, frameCount, result, byte10, jsonBytes), content);
             }
         } else {
             // 不需要拆包
-            byte0 = 0x00;
+            if (isAudio) {
+                byte0 = 0x01 << 4;
+            } else {
+                byte0 = 0x00;
+            }
             byte9 = 0x00;
             // 发送
-            send(jsonBytes, byte10, frameCount, byte0, byte9, data);
+            send(getHeaderBytes(byte0, frameCount, byte9, byte10, jsonBytes), data);
         }
     }
 
     /**
      * 发送数据
      */
-    private void send(byte[] jsonBytes, byte byte10, byte[] frameCount, byte byte0, byte byte9, byte[] content) throws IOException {
-        byte[] header = getHeaderBytes(jsonBytes, byte10, frameCount, byte0, byte9);
+    private void send(byte[] header, byte[] content) throws IOException {
         // 拼接一个完整的udp包
-        byte[] result = new byte[200 + content.length];
-        System.arraycopy(header, 0, result, 0, 200);
-        System.arraycopy(content, 0, result, 200, content.length);
+        byte[] result = new byte[headerLength + content.length];
+        System.arraycopy(header, 0, result, 0, headerLength);
+        System.arraycopy(content, 0, result, headerLength, content.length);
         // 打包发送
-        DatagramPacket dataPacket = new DatagramPacket(result, result.length, mInetAddress, getPort());
-        Logger.d(TAG, "emit image data, length: " + dataPacket.getLength() + ", port: " + getPort());
+        DatagramPacket dataPacket = new DatagramPacket(result, result.length, mInetAddress, getRemotePort());
+        Logger.d(TAG, "DatagramPacket data length: " + dataPacket.getLength() + ", port: " + getRemotePort());
         mSocket.send(dataPacket);
     }
 
     /**
-     * 构造Json数据(rp：发送人，rd：发送设备，tp：接收人，td接收设备)
-     *
-     * @return byte[]
+     * 构造Json数据
+     * <p>
+     * rp：发送人
+     * rd：发送设备
+     * tp：接收人
+     * td接收设备
      */
-    byte[] getJsonBytes() {
+    private byte[] getJsonBytes() {
         try {
             JSONObject object = new JSONObject();
-            object.put("rp", mDataEntity.sourcePerson);
-            object.put("rd", mDataEntity.sourceDevice);
-            object.put("tp", mDataEntity.targetPerson);
-            object.put("td", mDataEntity.targetDevice);
-            byte[] jsonBytes = object.toString().getBytes("utf-8");
+            object.put(IMConstants.KEY_SOURCE_PERSON, mDataEntity.sourcePerson);
+            object.put(IMConstants.KEY_SOURCE_DEVICE, mDataEntity.sourceDevice);
+            object.put(IMConstants.KEY_TARGET_PERSON, mDataEntity.targetPerson);
+            object.put(IMConstants.KEY_TARGET_DEVICE, mDataEntity.targetDevice);
+            byte[] jsonBytes = object.toString().getBytes(IMConstants.CHARSET);
             if (jsonBytes.length > 188) {
-                Logger.e(TAG, "error, json data length is more than 190");
+                Logger.e(TAG, "error, the length of json data is more than 190");
                 return null;
             }
             return jsonBytes;
@@ -216,12 +542,18 @@ public class TalkbackTransfer {
     /**
      * 构建数据包的头部
      */
-    byte[] getHeaderBytes(byte[] jsonBytes, byte byte10, byte[] frameCount, byte byte0, byte byte9) {
-        byte[] header = new byte[200];
+    private byte[] getHeaderBytes(byte byte0, byte[] frameCount, byte byte9, byte byte10, byte[] jsonBytes) {
+        // 包头长度200
+        byte[] header = new byte[headerLength];
+        // 第1个字符
         header[0] = byte0;
+        // 第2到第9个字符
         System.arraycopy(frameCount, 0, header, 1, 8);
+        // 第10个字符
         header[9] = byte9;
+        // 第11个字符
         header[10] = byte10;
+        // 第12到第200个字符
         for (int index = 0; index < jsonBytes.length; index++) {
             header[11 + index] = jsonBytes[index];
         }
@@ -229,71 +561,128 @@ public class TalkbackTransfer {
     }
 
     /**
-     * 发送音频
+     * 判断音频数据包
      */
-    private Runnable mEmitAudioRunnable = new Runnable() {
-        @Override
-        public void run() {
-            try {
-                emitAudio();
-            } catch (IOException e) {
-                Logger.e(TAG, "Emit audio data error. " + e.getLocalizedMessage());
-            }
-        }
-    };
-
-    private void emitAudio() throws IOException {
-
+    private boolean isAudioData(byte data) {
+        return data == 0x01 << 4 || data == (0x01 << 4 | 0x01);
     }
 
     /**
-     * 接收
+     * 判断图片数据包
      */
-    private Runnable mReceiveRunnable = new Runnable() {
-        @Override
-        public void run() {
-            try {
-                receive();
-            } catch (IOException e) {
-                Logger.e(TAG, "Receive data error. " + e.getLocalizedMessage());
-            }
-        }
-    };
-
-    private void receive() throws IOException {
-
+    private boolean isImageData(byte data) {
+        return data == 0x00 || data == 0x01;
     }
 
-    public void startEmitImage() {
+    /**
+     * 通过Handler发送消息
+     *
+     * @param data byte[]
+     */
+    private void sendMsgToTarget(byte[] data) {
+        android.os.Message msg = mHandler.obtainMessage();
+        Bundle bundle = new Bundle();
+        bundle.putByteArray(ARGS_DATA, data);
+        msg.setData(bundle);
+        msg.what = WHAT_SUCCESS;
+        msg.sendToTarget();
+    }
+
+    /**
+     * 是否初始化成功
+     */
+    private boolean isInitialized(String method) {
         if (!mIsInitialized) {
-            Logger.e(TAG, "startEmitImage, init error.");
+            Logger.e(TAG, method + ", init error.");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 检测ImageSize
+     */
+    private boolean checkImageSize() {
+        if (mImageSize == null) {
+            Logger.e(TAG, "error, ImageSize is null");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 检测DataEntity
+     */
+    private boolean checkDataEntity() {
+        if (mDataEntity == null) {
+            Logger.e(TAG, "error, DataEntity is null");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 检测ImageDeque
+     */
+    private boolean checkImageDeque() {
+        if (mImageDeque == null) {
+            Logger.e(TAG, "error, ImageDeque is null");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 检测AudioDeque
+     */
+    private boolean checkAudioDeque() {
+        if (mAudioDeque == null) {
+            Logger.e(TAG, "error, AudioDeque is null");
+            return false;
+        }
+        return true;
+    }
+
+    /**
+     * 开始发射图片数据
+     */
+    public void startEmitImage() {
+        if (!isInitialized("startEmitImage") || !checkImageSize() ||
+                !checkDataEntity() || !checkImageDeque()) {
             return;
         }
         mShutdown = false;
         new Thread(mEmitImageRunnable).start();
     }
 
+    /**
+     * 开始发射音频数据
+     */
     public void startEmitAudio() {
-        if (!mIsInitialized) {
-            Logger.e(TAG, "startEmitAudio, init error.");
+        if (!isInitialized("startEmitAudio") || !checkDataEntity() ||
+                !checkAudioDeque()) {
             return;
         }
         mShutdown = false;
         new Thread(mEmitAudioRunnable).start();
     }
 
+    /**
+     * 开始接收数据
+     */
     public void startReceive() {
-        if (!mIsInitialized) {
-            Logger.e(TAG, "startReceive, init error.");
+        if (!isInitialized("startReceive")) {
             return;
         }
         mShutdown = false;
         new Thread(mReceiveRunnable).start();
     }
 
+    /**
+     * 关闭，释放资源
+     */
     public void stop() {
-        if (!mIsInitialized) {
-            Logger.e(TAG, "stop, init error.");
+        if (!isInitialized("stop")) {
             return;
         }
         mShutdown = true;
@@ -306,20 +695,82 @@ public class TalkbackTransfer {
     }
 
     /**
-     * 获取MulticastSocket
+     * 主机地址
      *
-     * @return MulticastSocket
+     * @return String
      */
-    public int getPort() {
-        return IMConstants.IMAGE_EMIT_PORT;
+    private String getHost() {
+        return IMConstants.HOST;
     }
 
-    public void setImageSize(ImageSize imageSize) {
-        mImageSize = imageSize;
+    /**
+     * 本地端口，发送接收
+     *
+     * @return int
+     */
+    private int getLocalPort() {
+//        return IMConstants.LOCAL_PORT;
+        return IMConstants.REMOTE_PORT;
     }
 
-    public void setDataEntity(DataEntity dataEntity) {
-        mDataEntity = dataEntity;
+    /**
+     * 远程端口，发送
+     *
+     * @return int
+     */
+    private int getRemotePort() {
+//        return IMConstants.REMOTE_PORT;
+        return IMConstants.LOCAL_PORT;
+    }
+
+    /**
+     * 设置ImageSize
+     */
+    public void setImageSize(int width, int height) {
+        mImageSize = new ImageSize(width, height);
+    }
+
+    /**
+     * 设置DataEntity
+     */
+    public void setDataEntity(String sourcePerson, String sourceDevice, String targetPerson, String targetDevice) {
+        mDataEntity = new DataEntity(sourcePerson, sourceDevice, targetPerson, targetDevice);
+    }
+
+    /**
+     * 设置图片数据源
+     *
+     * @param deque LinkedBlockingDeque<byte[]>
+     */
+    public void setImageDataSource(LinkedBlockingDeque<byte[]> deque) {
+        mImageDeque = deque;
+    }
+
+    /**
+     * 设置音频数据源
+     *
+     * @param deque LinkedBlockingDeque<byte[]>
+     */
+    public void setAudioDataSource(LinkedBlockingDeque<byte[]> deque) {
+        mAudioDeque = deque;
+    }
+
+    /**
+     * 设置图片接收监听
+     *
+     * @param receiver IMediaReceiver
+     */
+    public void setImageReceiver(IMediaReceiver receiver) {
+        mImageReceiver = receiver;
+    }
+
+    /**
+     * 设置音频接收监听
+     *
+     * @param receiver IMediaReceiver
+     */
+    public void setAudioReceiver(IMediaReceiver receiver) {
+        mAudioReceiver = receiver;
     }
 
     /**

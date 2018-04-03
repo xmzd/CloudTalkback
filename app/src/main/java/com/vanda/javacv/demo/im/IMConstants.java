@@ -35,9 +35,20 @@ public final class IMConstants {
      */
     public static final int LOCAL_PORT = 8888;
 
+    /**
+     * 远程服务端Socket端口
+     */
+    public static final int REMOTE_PORT = 9990;
+
     public static final String SOURCE_PERSON = "user1";
     public static final String SOURCE_DEVICE = "android";
-
     public static final String TARGET_PERSON = "user2";
     public static final String TARGET_DEVICE = "ios3";
+
+    public static final String KEY_SOURCE_PERSON = "rp";
+    public static final String KEY_SOURCE_DEVICE = "rd";
+    public static final String KEY_TARGET_PERSON = "tp";
+    public static final String KEY_TARGET_DEVICE = "td";
+
+    public static final String CHARSET = "utf-8";
 }

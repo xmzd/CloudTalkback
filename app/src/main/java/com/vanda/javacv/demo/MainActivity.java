@@ -30,6 +30,7 @@ import com.vanda.javacv.demo.im.ImageReceiver;
 import com.vanda.javacv.demo.im.socket.IMediaConversation;
 import com.vanda.javacv.demo.im.socket.Message;
 import com.vanda.javacv.demo.im.socket.SocketClient;
+import com.vanda.javacv.demo.im.socket.TalkbackTransfer;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -56,6 +57,8 @@ public class MainActivity extends AppCompatActivity {
 
     LinearLayout ll;
     Button show;
+
+    private TalkbackTransfer mTransfer;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -227,12 +230,15 @@ public class MainActivity extends AppCompatActivity {
         mAudioRecorder = new AudioRecorder();
         mAudioRecorder.startRecording();
 
-        mAudioEmitter = new AudioEmitter(mAudioRecorder.getDeque());
+        mTransfer.setAudioDataSource(mAudioRecorder.getDeque());
+        mTransfer.startEmitAudio();
+
+        /*mAudioEmitter = new AudioEmitter(mAudioRecorder.getDeque());
         mAudioEmitter.setSrcName(IMConstants.SOURCE_PERSON);
         mAudioEmitter.setSrcDevice(IMConstants.TARGET_DEVICE);
         mAudioEmitter.setDestName(IMConstants.SOURCE_PERSON);
         mAudioEmitter.setDestDevice(IMConstants.SOURCE_DEVICE);
-//        mAudioEmitter.start();
+        mAudioEmitter.start();*/
     }
 
     private void videoShoot() {
@@ -247,14 +253,19 @@ public class MainActivity extends AppCompatActivity {
         // 开始预览
         mPreviewView.startPreview();
         // 发送视频
-        mImageEmitter = new ImageEmitter(mPreviewView.getDeque());
+        mTransfer.setImageSize(mPreviewView.getPreviewWidth(), mPreviewView.getPreviewHeight());
+        mTransfer.setImageDataSource(mPreviewView.getDeque());
+        mTransfer.startEmitImage();
+
+        // 发送视频
+        /*mImageEmitter = new ImageEmitter(mPreviewView.getDeque());
         mImageEmitter.setWidth(mPreviewView.getPreviewWidth());
         mImageEmitter.setHeight(mPreviewView.getPreviewHeight());
         mImageEmitter.setSrcName(IMConstants.SOURCE_PERSON);
         mImageEmitter.setSrcDevice(IMConstants.SOURCE_DEVICE);
         mImageEmitter.setDestName(IMConstants.TARGET_PERSON);
         mImageEmitter.setDestDevice(IMConstants.TARGET_DEVICE);
-        mImageEmitter.start();
+        mImageEmitter.start();*/
     }
 
     private void startReceive() {
@@ -269,29 +280,45 @@ public class MainActivity extends AppCompatActivity {
 //        });
 //        mImageReceiver.start();
 
-        mAVReceiver = new AVReceiver();
-        mAVReceiver.setImageReceiver(new IMediaReceiver() {
+//        mAVReceiver = new AVReceiver();
+//        mAVReceiver.setImageReceiver(new IMediaReceiver() {
+//            @Override
+//            public void onReceive(byte[] data) {
+//                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
+//                mImageView.setImageBitmap(bitmap);
+//            }
+//        });
+        // 音频接收
+//        mAudioReceiver = new AudioReceiver();
+        mAudioPlayer = new AudioPlayer();
+//        player.setAudioReceiver(mAudioReceiver);
+//        mAudioPlayer.setAudioReceiver(mAVReceiver);
+        mAudioPlayer.setAudioreceiver(mTransfer);
+        mAudioPlayer.prepare();
+//        mAudioReceiver.start();
+
+//        mAVReceiver.start();
+
+        mTransfer.setImageReceiver(new IMediaReceiver() {
             @Override
             public void onReceive(byte[] data) {
                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                 mImageView.setImageBitmap(bitmap);
             }
         });
-        // 音频接收
-//        mAudioReceiver = new AudioReceiver();
-        mAudioPlayer = new AudioPlayer();
-//        player.setAudioReceiver(mAudioReceiver);
-        mAudioPlayer.setAudioReceiver(mAVReceiver);
-        mAudioPlayer.prepare();
-//        mAudioReceiver.start();
-
-        mAVReceiver.start();
+//        mTransfer.setAudioReceiver(mAudioPlayer);
+        mTransfer.startReceive();
     }
 
     /**
      * 开启会话
      */
     private void openTalk() {
+        mTransfer = new TalkbackTransfer();
+        mTransfer.setDataEntity(IMConstants.SOURCE_PERSON,
+                IMConstants.SOURCE_DEVICE,
+                IMConstants.TARGET_PERSON,
+                IMConstants.TARGET_DEVICE);
         openCamera();
         record();
         startReceive();
@@ -304,7 +331,9 @@ public class MainActivity extends AppCompatActivity {
         mImageEmitter.stop();
         mAudioEmitter.stop();
         mAVReceiver.stop();
+
         mAudioPlayer.release();
+        mTransfer.stop();
     }
 
     @Override

@@ -9,11 +9,9 @@ import com.vanda.javacv.demo.utils.Logger;
 import java.io.IOException;
 import java.lang.ref.WeakReference;
 import java.net.DatagramPacket;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,7 +28,6 @@ public class AVReceiver extends MediaReceiver {
     private static final int WHAT_SUCCESS = 1;
     private static final String ARGS_DATA = "data";
     private ReceiveHandler mHandler;
-    private List<byte[]> mImageFrameList = new ArrayList<>();
     private Map<Byte, byte[]> mImageMap = new HashMap<>();
     private long mCurrentImageFrameNum = 1;
     private int mCurrentImageFramePacketSum;

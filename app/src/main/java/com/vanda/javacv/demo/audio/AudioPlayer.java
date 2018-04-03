@@ -7,13 +7,14 @@ import android.os.Handler;
 import com.vanda.javacv.demo.im.AVReceiver;
 import com.vanda.javacv.demo.im.AudioReceiver;
 import com.vanda.javacv.demo.im.IMediaReceiver;
+import com.vanda.javacv.demo.im.socket.TalkbackTransfer;
 
 /**
  * Date    20/03/2018
  * Author  WestWang
  */
 
-public class AudioPlayer implements IAudioPlayer {
+public class AudioPlayer implements IAudioPlayer, IMediaReceiver {
 
     private static final String TAG = AudioPlayer.class.getSimpleName();
     private AudioParam mAudioParam;
@@ -28,6 +29,7 @@ public class AudioPlayer implements IAudioPlayer {
 
     private AVReceiver mAVReceiver;
     private AudioReceiver mAudioReceiver;
+    private TalkbackTransfer mTransfer;
 
     public AudioPlayer() {
         mAudioParam = new AudioParam();
@@ -159,6 +161,10 @@ public class AudioPlayer implements IAudioPlayer {
         mAudioReceiver = receiver;
     }
 
+    public void setAudioreceiver(TalkbackTransfer transfer) {
+        mTransfer = transfer;
+    }
+
     /**
      * 接收PCM音频数据并写入到AudioTrack
      */
@@ -180,6 +186,25 @@ public class AudioPlayer implements IAudioPlayer {
                 }
             });
         }
+        if (mTransfer != null) {
+            mTransfer.setAudioReceiver(new IMediaReceiver() {
+                @Override
+                public void onReceive(byte[] data) {
+                    mAudioTrack.write(data, 0, data.length);
+                }
+            });
+        }
     }
 
+    /**
+     * 视频数据
+     *
+     * @param data byte[]
+     */
+    @Override
+    public void onReceive(byte[] data) {
+        if (mAudioTrack != null) {
+            mAudioTrack.write(data, 0, data.length);
+        }
+    }
 }
