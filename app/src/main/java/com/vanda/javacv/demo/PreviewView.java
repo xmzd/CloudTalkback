@@ -84,8 +84,8 @@ public class PreviewView extends SurfaceView implements SurfaceHolder.Callback, 
         Logger.e(TAG, "default preview format is " + mCamera.getParameters().getPreviewFormat());
         // 设置相机预览参数
         Camera.Parameters parameters = mCamera.getParameters();
-        parameters.setPreviewSize(640, 480);
-        parameters.setPreviewFpsRange(30000, 30000);
+        parameters.setPreviewSize(320, 240);
+        parameters.setPreviewFpsRange(20000, 20000);
         if (formats.contains(ImageFormat.YV12)) {
             parameters.setPreviewFormat(ImageFormat.YV12);
         }

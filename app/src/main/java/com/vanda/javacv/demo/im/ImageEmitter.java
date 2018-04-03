@@ -23,8 +23,8 @@ import java.util.concurrent.LinkedBlockingDeque;
 public class ImageEmitter extends MediaEmitter {
 
     private static final String TAG = ImageEmitter.class.getSimpleName();
-    private int mWidth = 640;
-    private int mHeight = 480;
+    private int mWidth = 320;
+    private int mHeight = 240;
     private LinkedBlockingDeque<byte[]> mDeque;
 
     public ImageEmitter(LinkedBlockingDeque<byte[]> deque) {

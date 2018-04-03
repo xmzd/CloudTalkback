@@ -20,11 +20,18 @@
 
     </FrameLayout>
 
+    <Button
+        android:id="@+id/show"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:text="Hide"
+        android:textAllCaps="false"/>
 
     <LinearLayout
+        android:id="@+id/ll"
+        android:layout_above="@+id/button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:layout_alignParentBottom="true"
         android:orientation="vertical">
 
         <Button
@@ -83,13 +90,14 @@
             android:text="Connect"
             android:textAllCaps="false"/>
 
-        <Button
-            android:id="@+id/button"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:text="Camera"
-            android:textAllCaps="false"/>
-
     </LinearLayout>
+
+    <Button
+        android:id="@+id/button"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:text="Camera"
+        android:layout_alignParentBottom="true"
+        android:textAllCaps="false"/>
 
 </RelativeLayout>

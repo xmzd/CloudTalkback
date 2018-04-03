@@ -88,7 +88,7 @@ public class AVReceiver extends MediaReceiver {
      */
     @Override
     public int getPort() {
-        return IMConstants.IMAGE_RECEIVE_PORT;
+        return IMConstants.LOCAL_PORT;
     }
 
     /**
@@ -115,7 +115,7 @@ public class AVReceiver extends MediaReceiver {
             // json数据
             byte[] json = new byte[header[10]];
             System.arraycopy(header, 11, json, 0, header[10]);
-            Logger.e(TAG, "Json data: " + new String(json));
+            Logger.d(TAG, "Json data: " + new String(json));
             // 帧数据
             byte[] content = new byte[dpLen - headerLength];
             System.arraycopy(dpData, headerLength, content, 0, content.length);
@@ -169,7 +169,7 @@ public class AVReceiver extends MediaReceiver {
                 byte packetSum = (byte) ((packet & 0xF0) >> 4);
                 // 低4位，本次拆包序号
                 byte packetNum = (byte) (packet & 0x0F);
-                Logger.e(TAG, "packet info (拆包信息...) sum(本次拆包总数): " + packetSum + "num(本次拆包序号): " + packetNum);
+                Logger.e(TAG, "packet info (拆包信息...) sum(本次拆包总数): " + packetSum + ", num(本次拆包序号): " + packetNum);
                 if (first == 0x00) {
                     // 视频、不拆包
                     byte[] destData = new byte[matImage.length + content.length];
@@ -197,7 +197,7 @@ public class AVReceiver extends MediaReceiver {
                             int index = 0;
                             while (iterator.hasNext()) {
                                 keys[index] = iterator.next();
-                                index ++;
+                                index++;
                             }
                             Arrays.sort(keys);
                             for (Byte b : keys) {

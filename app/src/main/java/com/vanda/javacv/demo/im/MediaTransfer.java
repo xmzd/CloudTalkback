@@ -3,8 +3,8 @@ package com.vanda.javacv.demo.im;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.IOException;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.MulticastSocket;
 
 /**
  * Date    28/03/2018
@@ -16,12 +16,12 @@ public abstract class MediaTransfer {
 
     private static final String TAG = MediaTransfer.class.getSimpleName();
     InetAddress mInetAddress;
-    DatagramSocket mSocket;
+    MulticastSocket mSocket;
     boolean mShutdown = false;
     boolean mIsInitialized;
-    static final int packetLength = 5000;
+    static final int packetLength = 2000;
     static final int headerLength = 200;
-    static final int contentLength = 4800;
+    static final int contentLength = 1800;
 
     /**
      * 接收数据子线程

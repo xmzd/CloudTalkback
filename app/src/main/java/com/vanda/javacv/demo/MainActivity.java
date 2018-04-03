@@ -12,8 +12,10 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.View;
 import android.view.ViewGroup;
 import android.view.WindowManager;
+import android.widget.Button;
 import android.widget.FrameLayout;
 import android.widget.ImageView;
+import android.widget.LinearLayout;
 import android.widget.Toast;
 
 import com.vanda.javacv.demo.audio.AudioPlayer;
@@ -49,8 +51,11 @@ public class MainActivity extends AppCompatActivity {
     private AudioPlayer mAudioPlayer;
 
     private SocketClient mClient;
-    private String mHost = "192.168.3.77";
+    private String mHost = IMConstants.HOST;
     private int mPort = 9998;
+
+    LinearLayout ll;
+    Button show;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -61,6 +66,20 @@ public class MainActivity extends AppCompatActivity {
         setContentView(R.layout.activity_main);
         mImageView = findViewById(R.id.image);
         mContainer = findViewById(R.id.container);
+        ll = findViewById(R.id.ll);
+        show = findViewById(R.id.show);
+        show.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (ll.getVisibility() == View.VISIBLE) {
+                    ll.setVisibility(View.GONE);
+                    show.setText("Show");
+                } else {
+                    ll.setVisibility(View.VISIBLE);
+                    show.setText("Hide");
+                }
+            }
+        });
 
         findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
             @Override
@@ -209,11 +228,11 @@ public class MainActivity extends AppCompatActivity {
         mAudioRecorder.startRecording();
 
         mAudioEmitter = new AudioEmitter(mAudioRecorder.getDeque());
-        mAudioEmitter.setSrcName("WestWang");
-        mAudioEmitter.setSrcDevice("android");
-        mAudioEmitter.setDestName("TangChao");
-        mAudioEmitter.setDestDevice("iOS");
-        mAudioEmitter.start();
+        mAudioEmitter.setSrcName(IMConstants.SOURCE_PERSON);
+        mAudioEmitter.setSrcDevice(IMConstants.TARGET_DEVICE);
+        mAudioEmitter.setDestName(IMConstants.SOURCE_PERSON);
+        mAudioEmitter.setDestDevice(IMConstants.SOURCE_DEVICE);
+//        mAudioEmitter.start();
     }
 
     private void videoShoot() {
@@ -231,10 +250,10 @@ public class MainActivity extends AppCompatActivity {
         mImageEmitter = new ImageEmitter(mPreviewView.getDeque());
         mImageEmitter.setWidth(mPreviewView.getPreviewWidth());
         mImageEmitter.setHeight(mPreviewView.getPreviewHeight());
-        mImageEmitter.setSrcName("WestWang-v");
-        mImageEmitter.setSrcDevice("android");
-        mImageEmitter.setDestName("TangChao-v");
-        mImageEmitter.setDestDevice("iOS");
+        mImageEmitter.setSrcName(IMConstants.SOURCE_PERSON);
+        mImageEmitter.setSrcDevice(IMConstants.SOURCE_DEVICE);
+        mImageEmitter.setDestName(IMConstants.TARGET_PERSON);
+        mImageEmitter.setDestDevice(IMConstants.TARGET_DEVICE);
         mImageEmitter.start();
     }
 

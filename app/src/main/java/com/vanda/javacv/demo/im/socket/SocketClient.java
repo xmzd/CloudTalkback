@@ -4,11 +4,9 @@ import com.google.gson.Gson;
 import com.vanda.javacv.demo.im.IMConstants;
 import com.vanda.javacv.demo.utils.Logger;
 
-import java.io.BufferedReader;
 import java.io.BufferedWriter;
 import java.io.IOException;
 import java.io.InputStream;
-import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
 import java.net.Socket;
 import java.util.Timer;
@@ -17,6 +15,7 @@ import java.util.TimerTask;
 /**
  * Date    28/02/2018
  * Author  WestWang
+ * IM客户端，TCP/IP长连接
  */
 
 public class SocketClient {
@@ -26,7 +25,6 @@ public class SocketClient {
     private String mHost;
     private int mPort;
     private Socket mSocket = null;
-    private BufferedReader mReader = null;
     private BufferedWriter mWriter = null;
     private boolean mMsgAck = false;
     private int mRepeatTimes = 0;
@@ -40,14 +38,15 @@ public class SocketClient {
         mPort = port;
     }
 
+    /**
+     * 创建Socket，建立连接
+     */
     public void connect() {
         try {
             log("start connecting...");
             mSocket = new Socket(mHost, mPort);
             // 读取服务端发送过来的消息
-            InputStream is = mSocket.getInputStream();
-            handleReader(is);
-            mReader = new BufferedReader(new InputStreamReader(is));
+            handleReader(mSocket.getInputStream());
             // 发送消息到服务端
             mWriter = new BufferedWriter(new OutputStreamWriter(mSocket.getOutputStream(), CHARSET));
             log("connect success.");
@@ -57,7 +56,7 @@ public class SocketClient {
     }
 
     /**
-     * 接受消息
+     * 接受处理服务端发送过来的消息
      */
     private void handleReader(final InputStream is) {
         new Thread(new Runnable() {
@@ -70,28 +69,32 @@ public class SocketClient {
                     while ((len = (is.read(bytes, 0, maxLen))) != -1) {
                         String message = new String(bytes, 0, len);
                         log("New Message: " + message);
+                        // 解析message
                         Message msg = new Gson().fromJson(message, Message.class);
 
-                        if (msg != null && msg.getAckType() != 0) {
-                            // 收到ack消息，取消重发机制
-                            mMsgAck = true;
-                            if (mTimer != null) {
-                                mTimer.cancel();
-                                mTimer = null;
+                        if (msg != null) {
+                            if (msg.getAckType() != 0) {
+                                // 收到ack消息，取消重发机制
+                                mMsgAck = true;
+                                if (mTimer != null) {
+                                    mTimer.cancel();
+                                    mTimer = null;
+                                }
+                                if (mTimerTask != null) {
+                                    mTimerTask.cancel();
+                                    mTimerTask = null;
+                                }
+                            } else {
+                                sendAck(message);
                             }
-                            if (mTimerTask != null) {
-                                mTimerTask.cancel();
-                                mTimerTask = null;
-                            }
-                        } else {
-                            sendAck(message);
                         }
+
 
                         dealMessage(msg);
 
                     }
                 } catch (IOException e) {
-                    e.printStackTrace(System.out);
+                    log("error, handle Socket InputStream. " + e.getLocalizedMessage());
                 }
             }
         }).start();
@@ -104,6 +107,50 @@ public class SocketClient {
     private void dealMessage(Message msg) {
         if (msg == null) {
             return;
+        }
+        switch (msg.getMessageType()) {
+            // 服务端消息接收任务
+            case 1:
+                break;
+            // 服务端消息接收后确认任务
+            case 2:
+                break;
+            // 服务端消息发送任务
+            case 3:
+                break;
+            // 服务端消息发送后确认任务
+            case 4:
+                break;
+            // 用户登录任务
+            case 5:
+                break;
+            // 用户登出任务
+            case 6:
+                break;
+            // 服务端消息接收：视频语音呼叫任务
+            case 7:
+                break;
+            // 服务端消息接收：语音呼叫任务
+            case 8:
+                break;
+            // 服务端消息接收：视频/语音应答任务
+            case 9:
+                break;
+            // 服务端消息接收：视频/语音呼叫取消任务
+            case 10:
+                break;
+            // 服务端消息转发：视频语音呼叫任务
+            case 11:
+                break;
+            // 服务端消息转发：语音呼叫任务
+            case 12:
+                break;
+            // 服务端消息转发：视频/语音应答任务
+            case 13:
+                break;
+            // 服务端消息转发：视频/语音呼叫取消任务
+            case 14:
+                break;
         }
         voiceId = msg.getVoiceId();
         targetPerson = msg.getSourcePerson();
@@ -123,7 +170,7 @@ public class SocketClient {
             if (mConversation != null) {
                 mConversation.openConversation();
             }
-        } else if (type == 10) {
+        } else if (type == 10 || type == 14) {
             // 终止音视频会话
             if (mConversation != null) {
                 mConversation.closeConversation();
@@ -174,7 +221,6 @@ public class SocketClient {
             mAckMsg.setAckType(1);
             mAckMsg.setMessageType(4);
             mAckMsg.setMessageId(msg.getMessageId());
-//            mAckMsg.setOriginalMessageId(msg.getOriginalMessageId());
             mAckMsg.setSourcePerson(msg.getTargetPerson());
             mAckMsg.setSourceDevice(msg.getTargetDevice());
             doSend(mAckMsg);
@@ -186,6 +232,9 @@ public class SocketClient {
     }
 
     private void doSend(Message msg) {
+        if (msg == null) {
+            return;
+        }
         msg.setSendTime(System.currentTimeMillis());
         final String content = new Gson().toJson(msg);
         new Thread(new Runnable() {
@@ -227,9 +276,6 @@ public class SocketClient {
 
     public void disConnect() {
         try {
-            if (mReader != null) {
-                mReader.close();
-            }
             if (mWriter != null) {
                 mWriter.close();
             }

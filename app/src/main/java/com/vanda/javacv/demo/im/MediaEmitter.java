@@ -5,8 +5,8 @@ import com.vanda.javacv.demo.utils.Logger;
 import org.json.JSONObject;
 
 import java.io.IOException;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.MulticastSocket;
 
 /**
  * Date    28/03/2018
@@ -30,7 +30,9 @@ public abstract class MediaEmitter extends MediaTransfer {
     private void init() {
         try {
             mInetAddress = InetAddress.getByName(getHost());
-            mSocket = new DatagramSocket();
+            mSocket = new MulticastSocket(IMConstants.LOCAL_PORT);
+//            mSocket = new MulticastSocket();
+//            mSocket.joinGroup(mInetAddress);
             mIsInitialized = true;
         } catch (Exception e) {
             mIsInitialized = false;

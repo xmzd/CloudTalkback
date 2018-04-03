@@ -3,8 +3,8 @@ package com.vanda.javacv.demo.im;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.IOException;
-import java.net.DatagramSocket;
 import java.net.InetAddress;
+import java.net.MulticastSocket;
 
 /**
  * Date    26/03/2018
@@ -26,7 +26,7 @@ public abstract class MediaReceiver extends MediaTransfer {
     private void init() {
         try {
             mInetAddress = InetAddress.getByName(getHost());
-            mSocket = new DatagramSocket(getPort());
+            mSocket = new MulticastSocket(getPort());
             mIsInitialized = true;
         } catch (Exception e) {
             mIsInitialized = false;
