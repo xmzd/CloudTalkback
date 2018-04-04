@@ -4,6 +4,8 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 
+import com.vanda.javacv.demo.im.talkback.ITalkbackReceiver;
+import com.vanda.javacv.demo.im.utils.PacketUtil;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.IOException;
@@ -23,8 +25,8 @@ import java.util.Map;
 public class AVReceiver extends MediaReceiver {
 
     private static final String TAG = AVReceiver.class.getSimpleName();
-    private IMediaReceiver mAudioReceiver;
-    private IMediaReceiver mImageReceiver;
+    private ITalkbackReceiver mAudioReceiver;
+    private ITalkbackReceiver mImageReceiver;
     private static final int WHAT_SUCCESS = 1;
     private static final String ARGS_DATA = "data";
     private ReceiveHandler mHandler;
@@ -233,11 +235,11 @@ public class AVReceiver extends MediaReceiver {
         }
     }
 
-    public void setImageReceiver(IMediaReceiver receiver) {
+    public void setImageReceiver(ITalkbackReceiver receiver) {
         mImageReceiver = receiver;
     }
 
-    public void setAudioReceiver(IMediaReceiver receiver) {
+    public void setAudioReceiver(ITalkbackReceiver receiver) {
         mAudioReceiver = receiver;
     }
 

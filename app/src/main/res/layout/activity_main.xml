@@ -27,11 +27,19 @@
         android:text="Hide"
         android:textAllCaps="false"/>
 
+    <Button
+        android:id="@+id/closeAudio"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_toRightOf="@+id/show"
+        android:text="CloseAudio"
+        android:textAllCaps="false"/>
+
     <LinearLayout
         android:id="@+id/ll"
-        android:layout_above="@+id/button"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
+        android:layout_above="@+id/open"
         android:orientation="vertical">
 
         <Button
@@ -93,11 +101,19 @@
     </LinearLayout>
 
     <Button
-        android:id="@+id/button"
+        android:id="@+id/open"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:text="Camera"
+        android:layout_above="@+id/close"
+        android:text="Open"
+        android:textAllCaps="false"/>
+
+    <Button
+        android:id="@+id/close"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:layout_alignParentBottom="true"
+        android:text="Close"
         android:textAllCaps="false"/>
 
 </RelativeLayout>

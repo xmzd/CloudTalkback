@@ -1,5 +1,6 @@
 package com.vanda.javacv.demo.im;
 
+import com.vanda.javacv.demo.im.talkback.ITalkbackReceiver;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.IOException;
@@ -14,7 +15,7 @@ import java.net.DatagramPacket;
 public class AudioReceiver extends MediaReceiver {
 
     private static final String TAG = AudioReceiver.class.getSimpleName();
-    private IMediaReceiver mAudioReceiver;
+    private ITalkbackReceiver mAudioReceiver;
 
     /**
      * 获取InetAddress
@@ -97,7 +98,7 @@ public class AudioReceiver extends MediaReceiver {
         }
     }
 
-    public void setAudioReceiver(IMediaReceiver receiver) {
+    public void setAudioReceiver(ITalkbackReceiver receiver) {
         mAudioReceiver = receiver;
     }
 }

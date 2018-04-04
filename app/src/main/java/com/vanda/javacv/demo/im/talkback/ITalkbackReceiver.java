@@ -1,15 +1,15 @@
-package com.vanda.javacv.demo.im;
+package com.vanda.javacv.demo.im.talkback;
 
 /**
  * Date    26/03/2018
  * Author  WestWang
- * 音视频接收者接口
+ * 对讲接收者接口
  */
 
-public interface IMediaReceiver {
+public interface ITalkbackReceiver {
 
     /**
-     * 视频数据
+     * 接收数据
      *
      * @param data byte[]
      */

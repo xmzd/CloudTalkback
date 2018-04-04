@@ -7,6 +7,7 @@ import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
 
+import com.vanda.javacv.demo.im.utils.PacketUtil;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.ByteArrayOutputStream;

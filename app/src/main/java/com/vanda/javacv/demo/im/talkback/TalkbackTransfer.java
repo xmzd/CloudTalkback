@@ -1,4 +1,4 @@
-package com.vanda.javacv.demo.im.socket;
+package com.vanda.javacv.demo.im.talkback;
 
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
@@ -6,12 +6,11 @@ import android.graphics.ImageFormat;
 import android.graphics.Matrix;
 import android.graphics.Rect;
 import android.graphics.YuvImage;
-import android.os.*;
+import android.os.Handler;
 import android.util.SparseArray;
 
 import com.vanda.javacv.demo.im.IMConstants;
-import com.vanda.javacv.demo.im.IMediaReceiver;
-import com.vanda.javacv.demo.im.PacketUtil;
+import com.vanda.javacv.demo.im.utils.PacketUtil;
 import com.vanda.javacv.demo.utils.Logger;
 
 import org.json.JSONObject;
@@ -22,10 +21,6 @@ import java.lang.ref.WeakReference;
 import java.net.DatagramPacket;
 import java.net.InetAddress;
 import java.net.MulticastSocket;
-import java.util.Arrays;
-import java.util.HashMap;
-import java.util.Iterator;
-import java.util.Map;
 import java.util.concurrent.LinkedBlockingDeque;
 
 /**
@@ -47,21 +42,20 @@ public class TalkbackTransfer {
     private static final int headerLength = 200;
     private static final int contentLength = 1800;
     private static final int frameLength = 8;
+    private static int mImageWidth;
+    private static int mImageHeight;
 
     private LinkedBlockingDeque<byte[]> mImageDeque;
     private LinkedBlockingDeque<byte[]> mAudioDeque;
     private long mFrameImageCounter = 0;
     private long mFrameAudioCounter = 0;
 
-    private IMediaReceiver mAudioReceiver;
-    private IMediaReceiver mImageReceiver;
-    private static final int WHAT_SUCCESS = 1;
-    private static final String ARGS_DATA = "data";
+    private ITalkbackReceiver mImageReceiver;
+    private ITalkbackReceiver mAudioReceiver;
+    private static final int WHAT_IMAGE_DATA = 1;
     private ReceiveHandler mHandler;
-    private Map<Byte, byte[]> mImageMap = new HashMap<>();
     private SparseArray<byte[]> mImageArray;
     private SparseArray<byte[]> mAudioArray;
-    private Map<Byte, byte[]> mAudioMap = new HashMap<>();
     private long mCurrentImageFrameNum = 1;
     private int mCurrentImageFramePacketSum;
     private long mCurrentAudioFrameNum = 1;
@@ -88,13 +82,10 @@ public class TalkbackTransfer {
                 return;
             }
             switch (msg.what) {
-                case WHAT_SUCCESS:
-                    Bundle bundle = msg.getData();
-                    if (bundle != null) {
-                        byte[] data = bundle.getByteArray(ARGS_DATA);
-                        if (instance.mImageReceiver != null && data != null && data.length > 0) {
-                            instance.mImageReceiver.onReceive(data);
-                        }
+                case WHAT_IMAGE_DATA:
+                    byte[] data = (byte[]) msg.obj;
+                    if (instance.mImageReceiver != null && data != null && data.length > 0) {
+                        instance.mImageReceiver.onReceive(data);
                     }
                     break;
             }
@@ -173,6 +164,9 @@ public class TalkbackTransfer {
                 // YUV data from queue
                 byte[] data = mImageDeque.take();
                 // 转换成YuvImage
+                if (mImageSize == null) {
+                    mImageSize = new ImageSize(mImageWidth, mImageHeight);
+                }
                 YuvImage image = new YuvImage(data, ImageFormat.NV21, mImageSize.width, mImageSize.height, null);
                 ByteArrayOutputStream baos = new ByteArrayOutputStream();
                 // 压缩jpg
@@ -204,7 +198,6 @@ public class TalkbackTransfer {
      * 接收数据
      */
     private void receive() throws IOException {
-        // 用于接收数据
         byte buff[] = new byte[packetLength];
         // 存放一帧完整的音频数据
         byte[] matAudio = new byte[0];
@@ -216,7 +209,7 @@ public class TalkbackTransfer {
             mSocket.receive(dp);
             byte[] dpData = dp.getData();
             int dpLen = dp.getLength();
-            Logger.d(TAG, "data received, length: " + dpLen + ", port: " + getLocalPort());
+            Logger.e(TAG, "data received, length: " + dpLen + ", port: " + getLocalPort());
 
             // 解udp包
             byte[] header = new byte[headerLength];
@@ -271,21 +264,12 @@ public class TalkbackTransfer {
                     // 音频、需要拆包
                     if (frameNum > mCurrentAudioFrameNum) {
                         // 下一帧数据到达，合并上一帧数据并显示
-                        if (mCurrentAudioFramePacketSum != mAudioMap.size()) {
+                        if (mCurrentAudioFramePacketSum != mAudioArray.size()) {
                             // 当前帧未能完整接收，舍弃
                         } else {
                             // 当前帧完整接收，显示
-                            Byte[] keys = new Byte[mAudioMap.size()];
-                            Iterator<Byte> iterator = mAudioMap.keySet().iterator();
-                            int index = 0;
-                            while (iterator.hasNext()) {
-                                keys[index] = iterator.next();
-                                index++;
-                            }
-                            Arrays.sort(keys);
-                            for (Byte b : keys) {
-                                Logger.e(TAG, "排序后的包结果..." + b);
-                                byte[] audioPacket = mAudioMap.get(b);
+                            for (int i = 0; i < mAudioArray.size(); i++) {
+                                byte[] audioPacket = mAudioArray.valueAt(i);
                                 byte[] destData = new byte[matAudio.length + audioPacket.length];
                                 System.arraycopy(matAudio, 0, destData, 0, matAudio.length);
                                 System.arraycopy(audioPacket, 0, destData, matAudio.length, audioPacket.length);
@@ -304,12 +288,12 @@ public class TalkbackTransfer {
                             }
                         }
                         // 清空map
-                        mAudioMap.clear();
+                        mAudioArray.clear();
                         // 放入本包
-                        mAudioMap.put(packetNum, content);
+                        mAudioArray.put(packetNum, content);
                     } else if (frameNum == mCurrentAudioFrameNum) {
                         // 当前帧
-                        mAudioMap.put(packetNum, content);
+                        mAudioArray.put(packetNum, content);
                     } else {
                         // 网络原因导致该包到达较晚，舍弃
                     }
@@ -339,26 +323,10 @@ public class TalkbackTransfer {
                     // 视频、拆过包
                     if (frameNum > mCurrentImageFrameNum) {
                         // 下一帧数据到达，合并上一帧数据并显示
-                        if (mCurrentImageFramePacketSum != /*mImageMap.size()*/mImageArray.size()) {
+                        if (mCurrentImageFramePacketSum != mImageArray.size()) {
                             // 当前帧未能完整接收，舍弃
                         } else {
                             // 当前帧完整接收，显示
-                            /*Byte[] keys = new Byte[mImageMap.size()];
-                            Iterator<Byte> iterator = mImageMap.keySet().iterator();
-                            int index = 0;
-                            while (iterator.hasNext()) {
-                                keys[index] = iterator.next();
-                                index++;
-                            }
-                            Arrays.sort(keys);
-                            for (Byte b : keys) {
-                                Logger.e(TAG, "排序后的包结果..." + b);
-                                byte[] imagePacket = mImageMap.get(b);
-                                byte[] destData = new byte[matImage.length + imagePacket.length];
-                                System.arraycopy(matImage, 0, destData, 0, matImage.length);
-                                System.arraycopy(imagePacket, 0, destData, matImage.length, imagePacket.length);
-                                matImage = destData;
-                            }*/
                             for (int i = 0; i < mImageArray.size(); i++) {
                                 byte[] imagePacket = mImageArray.valueAt(i);
                                 byte[] destData = new byte[matImage.length + imagePacket.length];
@@ -377,14 +345,11 @@ public class TalkbackTransfer {
                             }
                         }
                         // 清空map
-//                        mImageMap.clear();
                         mImageArray.clear();
                         // 放入本包
-//                        mImageMap.put(packetNum, content);
                         mImageArray.put(packetNum, content);
                     } else if (frameNum == mCurrentImageFrameNum) {
                         // 当前帧
-//                        mImageMap.put(packetNum, content);
                         mImageArray.put(packetNum, content);
                     } else {
                         // 网络原因导致该包到达较晚，舍弃
@@ -508,7 +473,7 @@ public class TalkbackTransfer {
         System.arraycopy(content, 0, result, headerLength, content.length);
         // 打包发送
         DatagramPacket dataPacket = new DatagramPacket(result, result.length, mInetAddress, getRemotePort());
-        Logger.d(TAG, "DatagramPacket data length: " + dataPacket.getLength() + ", port: " + getRemotePort());
+        Logger.d(TAG, "send data length: " + dataPacket.getLength() + ", port: " + getRemotePort());
         mSocket.send(dataPacket);
     }
 
@@ -580,12 +545,12 @@ public class TalkbackTransfer {
      * @param data byte[]
      */
     private void sendMsgToTarget(byte[] data) {
-        android.os.Message msg = mHandler.obtainMessage();
-        Bundle bundle = new Bundle();
-        bundle.putByteArray(ARGS_DATA, data);
-        msg.setData(bundle);
-        msg.what = WHAT_SUCCESS;
-        msg.sendToTarget();
+        if (mHandler != null) {
+            android.os.Message msg = mHandler.obtainMessage();
+            msg.what = WHAT_IMAGE_DATA;
+            msg.obj = data;
+            msg.sendToTarget();
+        }
     }
 
     /**
@@ -681,17 +646,39 @@ public class TalkbackTransfer {
     /**
      * 关闭，释放资源
      */
-    public void stop() {
+    public void stopAndRelease() {
         if (!isInitialized("stop")) {
             return;
         }
         mShutdown = true;
         try {
+            mSocket.leaveGroup(mInetAddress);
             mSocket.close();
             Logger.d(TAG, "socket closed.");
         } catch (Exception e) {
             Logger.e(TAG, "stop error. " + e.getLocalizedMessage());
         }
+        mIsInitialized = false;
+
+        mInetAddress = null;
+        mSocket = null;
+
+        mImageSize = null;
+        mDataEntity = null;
+
+        mImageArray.clear();
+        mImageArray = null;
+        mAudioArray.clear();
+        mAudioArray = null;
+
+        mImageReceiver = null;
+        mAudioReceiver = null;
+
+        mHandler.removeMessages(WHAT_IMAGE_DATA);
+        mHandler = null;
+
+        mImageDeque.clear();
+        mAudioDeque.clear();
     }
 
     /**
@@ -727,7 +714,9 @@ public class TalkbackTransfer {
      * 设置ImageSize
      */
     public void setImageSize(int width, int height) {
-        mImageSize = new ImageSize(width, height);
+        mImageWidth = width;
+        mImageHeight = height;
+        mImageSize = new ImageSize(mImageWidth, mImageHeight);
     }
 
     /**
@@ -758,18 +747,13 @@ public class TalkbackTransfer {
     /**
      * 设置图片接收监听
      *
-     * @param receiver IMediaReceiver
+     * @param receiver ITalkbackReceiver
      */
-    public void setImageReceiver(IMediaReceiver receiver) {
+    public void setImageReceiver(ITalkbackReceiver receiver) {
         mImageReceiver = receiver;
     }
 
-    /**
-     * 设置音频接收监听
-     *
-     * @param receiver IMediaReceiver
-     */
-    public void setAudioReceiver(IMediaReceiver receiver) {
+    public void setAudioReceiver(ITalkbackReceiver receiver) {
         mAudioReceiver = receiver;
     }
 

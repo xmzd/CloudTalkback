@@ -1,4 +1,4 @@
-package com.vanda.javacv.demo.audio;
+package com.vanda.javacv.demo.im.talkback;
 
 import android.media.AudioFormat;
 

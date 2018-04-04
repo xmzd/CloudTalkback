@@ -1,4 +1,4 @@
-package com.vanda.javacv.demo.im.socket;
+package com.vanda.javacv.demo.im.talkback;
 
 /**
  * Date    30/03/2018
@@ -6,7 +6,7 @@ package com.vanda.javacv.demo.im.socket;
  * 音视频会话接口
  */
 
-public interface IMediaConversation {
+public interface ITalkbackConversation {
 
     /**
      * 开始会话

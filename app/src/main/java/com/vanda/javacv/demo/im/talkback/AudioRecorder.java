@@ -1,4 +1,4 @@
-package com.vanda.javacv.demo.im;
+package com.vanda.javacv.demo.im.talkback;
 
 import android.media.AudioFormat;
 import android.media.AudioRecord;
@@ -23,30 +23,34 @@ public class AudioRecorder {
     private int mBufferSize;
     private AudioRecord mAudioRecord;
     private boolean mIsRecording = false;
-    private LinkedBlockingDeque<byte[]> mQueue;
+    private LinkedBlockingDeque<byte[]> mDeque;
 
     public AudioRecorder() {
-        mBufferSize = AudioRecord.getMinBufferSize(mSampleRate, mChannelIn, mFormat);
-        mQueue = new LinkedBlockingDeque<>();
+        init();
     }
 
     public AudioRecorder(int sampleRate, int channelIn, int format) {
         mSampleRate = sampleRate;
         mChannelIn = channelIn;
         mFormat = format;
+        init();
+    }
+
+    private void init() {
         mBufferSize = AudioRecord.getMinBufferSize(mSampleRate, mChannelIn, mFormat);
-        mQueue = new LinkedBlockingDeque<>();
+        mDeque = new LinkedBlockingDeque<>();
     }
 
     /**
      * 实例化AudioRecord
      */
     private void createAudioRecord() {
-        mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, mSampleRate, mChannelIn, mFormat, mBufferSize);
+        mAudioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC,
+                mSampleRate, mChannelIn, mFormat, mBufferSize);
     }
 
     public LinkedBlockingDeque<byte[]> getDeque() {
-        return mQueue;
+        return mDeque;
     }
 
     /**
@@ -59,7 +63,7 @@ public class AudioRecorder {
         if (mAudioRecord.getRecordingState() == AudioRecord.RECORDSTATE_RECORDING) {
             mAudioRecord.stop();
         }
-        mQueue.clear();
+        mDeque.clear();
         mAudioRecord.startRecording();
         mIsRecording = true;
         // 启动线程开始采集
@@ -69,9 +73,11 @@ public class AudioRecorder {
                 try {
                     byte[] data = new byte[mBufferSize];
                     while (mIsRecording) {
-                        int flag = mAudioRecord.read(data, 0, mBufferSize);
-                        if (AudioRecord.ERROR_INVALID_OPERATION != flag) {
-                            mQueue.put(data);
+                        if (mAudioRecord != null && mDeque != null) {
+                            int flag = mAudioRecord.read(data, 0, mBufferSize);
+                            if (AudioRecord.ERROR_INVALID_OPERATION != flag) {
+                                mDeque.put(data);
+                            }
                         }
                     }
                 } catch (Exception e) {
@@ -81,9 +87,15 @@ public class AudioRecorder {
         }).start();
     }
 
-    public void stop() {
+    /**
+     * 停止采集，释放资源
+     */
+    public void stopAndRelease() {
         mIsRecording = false;
         mAudioRecord.stop();
         mAudioRecord.release();
+        mAudioRecord = null;
+        mDeque.clear();
+        mDeque = null;
     }
 }

@@ -1,4 +1,4 @@
-package com.vanda.javacv.demo.im;
+package com.vanda.javacv.demo.im.utils;
 
 /**
  * Date    29/03/2018

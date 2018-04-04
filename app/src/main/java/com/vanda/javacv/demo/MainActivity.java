@@ -18,19 +18,14 @@ import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Toast;
 
-import com.vanda.javacv.demo.audio.AudioPlayer;
-import com.vanda.javacv.demo.im.AVReceiver;
-import com.vanda.javacv.demo.im.AudioEmitter;
-import com.vanda.javacv.demo.im.AudioReceiver;
-import com.vanda.javacv.demo.im.AudioRecorder;
+import com.vanda.javacv.demo.im.talkback.AudioPlayer;
+import com.vanda.javacv.demo.im.talkback.AudioRecorder;
 import com.vanda.javacv.demo.im.IMConstants;
-import com.vanda.javacv.demo.im.IMediaReceiver;
-import com.vanda.javacv.demo.im.ImageEmitter;
-import com.vanda.javacv.demo.im.ImageReceiver;
-import com.vanda.javacv.demo.im.socket.IMediaConversation;
+import com.vanda.javacv.demo.im.talkback.ITalkbackReceiver;
+import com.vanda.javacv.demo.im.talkback.ITalkbackConversation;
 import com.vanda.javacv.demo.im.socket.Message;
 import com.vanda.javacv.demo.im.socket.SocketClient;
-import com.vanda.javacv.demo.im.socket.TalkbackTransfer;
+import com.vanda.javacv.demo.im.talkback.TalkbackTransfer;
 
 public class MainActivity extends AppCompatActivity {
 
@@ -42,23 +37,17 @@ public class MainActivity extends AppCompatActivity {
     private FrameLayout mContainer;
     private PreviewView mPreviewView;
 
-    private AVReceiver mAVReceiver;
-    private AudioReceiver mAudioReceiver;
-    private ImageReceiver mImageReceiver;
-
     private AudioRecorder mAudioRecorder;
-    private ImageEmitter mImageEmitter;
-    private AudioEmitter mAudioEmitter;
     private AudioPlayer mAudioPlayer;
+    private TalkbackTransfer mTransfer;
 
     private SocketClient mClient;
     private String mHost = IMConstants.HOST;
+
     private int mPort = 9998;
-
     LinearLayout ll;
-    Button show;
 
-    private TalkbackTransfer mTransfer;
+    Button show;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -83,24 +72,38 @@ public class MainActivity extends AppCompatActivity {
                 }
             }
         });
+        findViewById(R.id.closeAudio).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                mAudioPlayer.release();
+            }
+        });
 
-        findViewById(R.id.button).setOnClickListener(new View.OnClickListener() {
+        // 开启
+        findViewById(R.id.open).setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
                 openTalk();
             }
         });
+        // 关闭
+        findViewById(R.id.close).setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                closeTalk();
+            }
+        });
 
         mClient = new SocketClient(mHost, mPort);
-        mClient.setMediaConversation(new IMediaConversation() {
+        mClient.setMediaConversation(new ITalkbackConversation() {
             @Override
             public void openConversation() {
-//                openTalk();
+                openTalk();
             }
 
             @Override
             public void closeConversation() {
-//                closeTalk();
+                closeTalk();
             }
         });
 
@@ -232,81 +235,42 @@ public class MainActivity extends AppCompatActivity {
 
         mTransfer.setAudioDataSource(mAudioRecorder.getDeque());
         mTransfer.startEmitAudio();
-
-        /*mAudioEmitter = new AudioEmitter(mAudioRecorder.getDeque());
-        mAudioEmitter.setSrcName(IMConstants.SOURCE_PERSON);
-        mAudioEmitter.setSrcDevice(IMConstants.TARGET_DEVICE);
-        mAudioEmitter.setDestName(IMConstants.SOURCE_PERSON);
-        mAudioEmitter.setDestDevice(IMConstants.SOURCE_DEVICE);
-        mAudioEmitter.start();*/
     }
 
     private void videoShoot() {
-        ViewGroup.LayoutParams lp = mContainer.getLayoutParams();
-        int width = lp.width;
-        lp.height = (int) (width * 4.0f / 3.0f);
-        mContainer.setLayoutParams(lp);
-        mPreviewView = new PreviewView(this);
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
-                FrameLayout.LayoutParams.MATCH_PARENT);
-        mContainer.addView(mPreviewView, params);
+        if (mPreviewView == null || mPreviewView.getParent() == null) {
+            // 调整预览界面
+            ViewGroup.LayoutParams lp = mContainer.getLayoutParams();
+            int width = lp.width;
+            lp.height = (int) (width * 4.0f / 3.0f);
+            mContainer.setLayoutParams(lp);
+
+            mPreviewView = new PreviewView(this);
+            FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT,
+                    FrameLayout.LayoutParams.MATCH_PARENT);
+            mContainer.addView(mPreviewView, params);
+        }
         // 开始预览
         mPreviewView.startPreview();
         // 发送视频
         mTransfer.setImageSize(mPreviewView.getPreviewWidth(), mPreviewView.getPreviewHeight());
         mTransfer.setImageDataSource(mPreviewView.getDeque());
         mTransfer.startEmitImage();
-
-        // 发送视频
-        /*mImageEmitter = new ImageEmitter(mPreviewView.getDeque());
-        mImageEmitter.setWidth(mPreviewView.getPreviewWidth());
-        mImageEmitter.setHeight(mPreviewView.getPreviewHeight());
-        mImageEmitter.setSrcName(IMConstants.SOURCE_PERSON);
-        mImageEmitter.setSrcDevice(IMConstants.SOURCE_DEVICE);
-        mImageEmitter.setDestName(IMConstants.TARGET_PERSON);
-        mImageEmitter.setDestDevice(IMConstants.TARGET_DEVICE);
-        mImageEmitter.start();*/
     }
 
     private void startReceive() {
-        // 视频接收
-//        mImageReceiver = new ImageReceiver();
-//        mImageReceiver.setImageReceiver(new IMediaReceiver() {
-//            @Override
-//            public void onReceive(byte[] data) {
-//                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-//                mImageView.setImageBitmap(bitmap);
-//            }
-//        });
-//        mImageReceiver.start();
-
-//        mAVReceiver = new AVReceiver();
-//        mAVReceiver.setImageReceiver(new IMediaReceiver() {
-//            @Override
-//            public void onReceive(byte[] data) {
-//                Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
-//                mImageView.setImageBitmap(bitmap);
-//            }
-//        });
-        // 音频接收
-//        mAudioReceiver = new AudioReceiver();
         mAudioPlayer = new AudioPlayer();
-//        player.setAudioReceiver(mAudioReceiver);
-//        mAudioPlayer.setAudioReceiver(mAVReceiver);
-        mAudioPlayer.setAudioreceiver(mTransfer);
-        mAudioPlayer.prepare();
-//        mAudioReceiver.start();
-
-//        mAVReceiver.start();
-
-        mTransfer.setImageReceiver(new IMediaReceiver() {
+        mAudioPlayer.play();
+        // 视频接收
+        mTransfer.setImageReceiver(new ITalkbackReceiver() {
             @Override
             public void onReceive(byte[] data) {
                 Bitmap bitmap = BitmapFactory.decodeByteArray(data, 0, data.length);
                 mImageView.setImageBitmap(bitmap);
             }
         });
-//        mTransfer.setAudioReceiver(mAudioPlayer);
+        // 音频接收
+        mTransfer.setAudioReceiver(mAudioPlayer);
         mTransfer.startReceive();
     }
 
@@ -328,12 +292,10 @@ public class MainActivity extends AppCompatActivity {
      * 结束会话
      */
     private void closeTalk() {
-        mImageEmitter.stop();
-        mAudioEmitter.stop();
-        mAVReceiver.stop();
-
+        mPreviewView.stopPreview();
+        mAudioRecorder.stopAndRelease();
+        mTransfer.stopAndRelease();
         mAudioPlayer.release();
-        mTransfer.stop();
     }
 
     @Override

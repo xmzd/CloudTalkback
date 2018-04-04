@@ -4,6 +4,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Message;
 
+import com.vanda.javacv.demo.im.talkback.ITalkbackReceiver;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.IOException;
@@ -19,7 +20,7 @@ import java.net.DatagramPacket;
 public class ImageReceiver extends MediaReceiver {
 
     private static final String TAG = ImageReceiver.class.getSimpleName();
-    private IMediaReceiver mImageReceiver;
+    private ITalkbackReceiver mImageReceiver;
     private static final int WHAT_SUCCESS = 1;
     private static final String ARGS_DATA = "data";
     private ReceiveHandler mHandler;
@@ -138,7 +139,7 @@ public class ImageReceiver extends MediaReceiver {
         return IMConstants.IMAGE_RECEIVE_PORT;
     }
 
-    public void setImageReceiver(IMediaReceiver receiver) {
+    public void setImageReceiver(ITalkbackReceiver receiver) {
         mImageReceiver = receiver;
     }
 

@@ -2,6 +2,7 @@ package com.vanda.javacv.demo.im.socket;
 
 import com.google.gson.Gson;
 import com.vanda.javacv.demo.im.IMConstants;
+import com.vanda.javacv.demo.im.talkback.ITalkbackConversation;
 import com.vanda.javacv.demo.utils.Logger;
 
 import java.io.BufferedWriter;
@@ -31,7 +32,7 @@ public class SocketClient {
     private Timer mTimer = null;
     private TimerTask mTimerTask = null;
     private Message mAckMsg = null;
-    private IMediaConversation mConversation;
+    private ITalkbackConversation mConversation;
 
     public SocketClient(String host, int port) {
         mHost = host;
@@ -287,7 +288,7 @@ public class SocketClient {
         }
     }
 
-    public void setMediaConversation(IMediaConversation conversation) {
+    public void setMediaConversation(ITalkbackConversation conversation) {
         mConversation = conversation;
     }
 

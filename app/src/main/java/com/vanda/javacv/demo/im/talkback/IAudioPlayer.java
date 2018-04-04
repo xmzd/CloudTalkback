@@ -1,4 +1,4 @@
-package com.vanda.javacv.demo.audio;
+package com.vanda.javacv.demo.im.talkback;
 
 /**
  * Date    20/03/2018
@@ -9,42 +9,39 @@ public interface IAudioPlayer {
 
     /**
      * 设置参数
-     * @param param
+     *
+     * @param param AudioParam
      */
     void setAudioParam(AudioParam param);
 
     /**
      * 设置数据源
-     * @param data
+     *
+     * @param data byte[]
      */
     void setDataSource(byte[] data);
 
     /**
-     * 准备
-     * @return
-     */
-    boolean prepare();
-
-    /**
      * 设置播放状态
-     * @param state
+     *
+     * @param state int
      */
     void setPlayState(int state);
 
     /**
-     * 播放
+     * 开始
      */
-    void onStart();
+    void play();
 
     /**
      * 暂停
      */
-    void onPause();
+    void pause();
 
     /**
-     * 播放完成
+     * 停止
      */
-    void onComplete();
+    void stop();
 
     /**
      * 释放资源
