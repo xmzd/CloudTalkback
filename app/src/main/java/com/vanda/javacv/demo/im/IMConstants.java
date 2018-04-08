@@ -12,6 +12,7 @@ public final class IMConstants {
      * 主播地址
      */
     public static final String HOST = "192.168.3.103";
+//    public static final String HOST = "47.92.50.248";
 //    public static final String HOST = "239.0.0.100";
     /**
      * 图片接收端口
@@ -43,7 +44,7 @@ public final class IMConstants {
     public static final String SOURCE_PERSON = "user1";
     public static final String SOURCE_DEVICE = "android";
     public static final String TARGET_PERSON = "user2";
-    public static final String TARGET_DEVICE = "ios3";
+    public static final String TARGET_DEVICE = "ios2";
 
     public static final String KEY_SOURCE_PERSON = "rp";
     public static final String KEY_SOURCE_DEVICE = "rd";

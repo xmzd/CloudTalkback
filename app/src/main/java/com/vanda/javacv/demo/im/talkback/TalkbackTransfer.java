@@ -102,10 +102,8 @@ public class TalkbackTransfer {
 
     private void init() {
         try {
-//            mInetAddress = InetAddress.getByName(getHost());
-            mInetAddress = InetAddress.getByName("239.0.0.100");
+            mInetAddress = InetAddress.getByName(getHost());
             mSocket = new MulticastSocket(getLocalPort());
-            mSocket.joinGroup(mInetAddress);
             mIsInitialized = true;
         } catch (Exception e) {
             mIsInitialized = false;
@@ -218,7 +216,7 @@ public class TalkbackTransfer {
             // 解json数据
             byte[] json = new byte[header[10]];
             System.arraycopy(header, 11, json, 0, header[10]);
-            Logger.d(TAG, "Json data: " + new String(json));
+            Logger.e(TAG, "Json data: " + new String(json));
 
             // 解帧编号
             byte[] frameCount = new byte[frameLength];
@@ -652,7 +650,6 @@ public class TalkbackTransfer {
         }
         mShutdown = true;
         try {
-            mSocket.leaveGroup(mInetAddress);
             mSocket.close();
             Logger.d(TAG, "socket closed.");
         } catch (Exception e) {
@@ -696,8 +693,7 @@ public class TalkbackTransfer {
      * @return int
      */
     private int getLocalPort() {
-//        return IMConstants.LOCAL_PORT;
-        return IMConstants.REMOTE_PORT;
+        return IMConstants.LOCAL_PORT;
     }
 
     /**
@@ -706,8 +702,7 @@ public class TalkbackTransfer {
      * @return int
      */
     private int getRemotePort() {
-//        return IMConstants.REMOTE_PORT;
-        return IMConstants.LOCAL_PORT;
+        return IMConstants.REMOTE_PORT;
     }
 
     /**
