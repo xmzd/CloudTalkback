@@ -11,8 +11,8 @@ public final class IMConstants {
     /**
      * 主播地址
      */
-    public static final String HOST = "192.168.3.103";
-//    public static final String HOST = "47.92.50.248";
+//    public static final String HOST = "192.168.3.103";
+    public static final String HOST = "47.92.50.248";
 //    public static final String HOST = "239.0.0.100";
     /**
      * 图片接收端口
