@@ -39,7 +39,6 @@ public class TalkbackTransfer {
     private ImageSize mImageSize;
     private DataEntity mDataEntity;
     private static final int packetLength = 1000;
-    private static final int contentLength = 800;
     private static final int frameLength = 8;
     private static int mImageWidth;
     private static int mImageHeight;
@@ -209,9 +208,10 @@ public class TalkbackTransfer {
             Logger.e(TAG, "data received, length: " + dpLen + ", port: " + getLocalPort());
 
             // 解udp包
-            int headerLen = 12 + dpData[11];
-            byte[] header = new byte[headerLen];
-            System.arraycopy(dpData, 0, header, 0, headerLen);
+            // 头部长度
+            int headerLength = 12 + dpData[11];
+            byte[] header = new byte[headerLength];
+            System.arraycopy(dpData, 0, header, 0, headerLength);
 
             // 解json数据
             byte[] json = new byte[header[11]];
@@ -225,15 +225,15 @@ public class TalkbackTransfer {
             Logger.e(TAG, "frame number (帧编号) : " + frameNum);
 
             // 解包信息
-            // 高4位，拆包总数
+            // 拆包总数
             byte packetSum = header[9];
-            // 低4位，本次拆包序号
+            // 本次拆包序号
             byte packetNum = header[10];
             Logger.e(TAG, "packet info sum(本次拆包总数): " + packetSum + ", num(本次拆包序号): " + packetNum);
 
             // 帧数据
-            byte[] content = new byte[dpLen - headerLen];
-            System.arraycopy(dpData, headerLen, content, 0, content.length);
+            byte[] content = new byte[dpLen - headerLength];
+            System.arraycopy(dpData, headerLength, content, 0, content.length);
 
             // 第1个字符，用于判断是图片数据还是音频数据
             byte first = header[0];
@@ -388,11 +388,13 @@ public class TalkbackTransfer {
      * <p>
      * 第2个字符 至 第9个字符，这8个byte（长整型）表示本帧编号，编号从1开始，每一个后续帧的编号+1
      * <p>
-     * 第10个字符，高4位 0000：如果拆包，这里记录了拆包的总数，如果不拆包，则没有意义
-     * 第10个字符，低4位 0000：如果拆包，则记录当前包在整个拆包中的序号，从1开始；如果不拆包，则没有意义
+     * 第10个字符 0000 0000: 如果拆包，这里记录了拆包的总数，如果不拆包，则没有意义
      * <p>
-     * 第11个字符，共八位，0000 0000 记录包中从第12个字符开始，json数据的长度，最长188
-     * 第12个字符～第200个字符：json数据-->rp：发送人，rd：发送设备，tp：接收人，td接收设备
+     * 第11个字符 0000 0000：如果拆包，则记录当前包在整个拆包中的序号，从1开始；如果不拆包，则没有意义
+     * <p>
+     * 第12个字符 0000 0000: 记录包中从第13个字符开始，json数据的长度，记为X
+     * <p>
+     * 第13个字符 至 第13+X-1个字符：json数据-->rp：发送人，rd：发送设备，tp：接收人，td接收设备
      */
     private void packetData(byte[] data, boolean isAudio) throws IOException {
         int length = data.length;
@@ -406,7 +408,8 @@ public class TalkbackTransfer {
         if (jsonBytes == null) {
             return;
         }
-        int headerLen = 12 + jsonBytes.length;
+        // 头部数据长度
+        int headerLength = getHeaderLength(jsonBytes);
         // 第12个字符，json长度
         byte byte11 = (byte) (jsonBytes.length & 0xFF);
         // 构建第2个字符至第9个字符
@@ -424,10 +427,11 @@ public class TalkbackTransfer {
         byte byte0 = 0;
         byte byte9 = 0;
         byte byte10 = 0;
-        int conLen = packetLength - headerLen;
-        if (length > conLen) {
+        // 帧数据长度
+        int contentLength = packetLength - headerLength;
+        if (length > contentLength) {
             // 需要拆包
-            int count = (length % conLen == 0) ? (length / conLen) : ((length / conLen) + 1);
+            int count = (length % contentLength == 0) ? (length / contentLength) : ((length / contentLength) + 1);
             // 第10个字符，记录本次拆包总数
             byte9 = (byte) (count & 0xFF);
             for (int i = 0; i < count; i++) {
@@ -439,12 +443,12 @@ public class TalkbackTransfer {
                 byte[] content;
                 if (i == count - 1) {
                     // 最后一个包
-                    content = new byte[length - i * conLen];
+                    content = new byte[length - i * contentLength];
                 } else {
                     // 不是最后一个包
-                    content = new byte[conLen];
+                    content = new byte[contentLength];
                 }
-                System.arraycopy(data, i * conLen, content, 0, content.length);
+                System.arraycopy(data, i * contentLength, content, 0, content.length);
                 // 第11个字符，记录此包在本次拆包中序号
                 byte10 = (byte) ((i + 1) & 0xFF);
                 // 发送
@@ -510,8 +514,7 @@ public class TalkbackTransfer {
      */
     private byte[] getHeaderBytes(byte byte0, byte[] frameCount, byte byte9, byte byte10, byte byte11, byte[] jsonBytes) {
         // 计算包头长度
-        int length = 12 + byte11;
-        // 包头长度200
+        int length = getHeaderLength(jsonBytes);
         byte[] header = new byte[length];
         // 第1个字符
         header[0] = byte0;
@@ -523,11 +526,22 @@ public class TalkbackTransfer {
         header[10] = byte10;
         // 第12个字符
         header[11] = byte11;
-        // 第13到第200个字符
+        // 第13到第X个字符
         for (int index = 0; index < jsonBytes.length; index++) {
             header[12 + index] = jsonBytes[index];
         }
         return header;
+    }
+
+    /**
+     * 获取头部数据的长度
+     *
+     * @param jsonBytes byte[]
+     * @return int
+     */
+    private int getHeaderLength(byte[] jsonBytes) {
+        // 固定长度加上json字符的长度
+        return 12 + jsonBytes.length;
     }
 
     /**
